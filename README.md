@@ -35,7 +35,7 @@ iOS không cho app chạy nền lâu. Khi chuyển app khác hoặc khoá máy, 
 
 - Bật kênh **160 MHz** cho băng 5 GHz trong router.
 - PC cắm dây vào cổng 2.5G của router.
-- Trình tự đọc số đo: nếu màn đo tốc độ cao mà chuyển file thật chậm, nút cổ chai là ổ đĩa chứ không phải mạng.
+- Nếu màn đo tốc độ cho số cao mà chuyển file thật lại chậm, nút cổ chai là ổ đĩa chứ không phải mạng.
 
 ## Phát triển
 

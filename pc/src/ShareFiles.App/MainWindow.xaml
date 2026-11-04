@@ -129,8 +129,9 @@
                         <StackPanel>
                             <TextBlock Text="Ghép đôi thiết bị mới" Style="{StaticResource Heading}" />
                             <TextBlock Text="Mở app trên điện thoại rồi quét mã này" Margin="0,3,0,12" Style="{StaticResource Caption}" />
-                            <Border Background="White" CornerRadius="14" Padding="10" Width="230" Height="230" HorizontalAlignment="Center">
-                                <Image Source="{Binding QrImage}" RenderOptions.BitmapScalingMode="NearestNeighbor" />
+                            <Border Background="White" CornerRadius="14" Padding="12" HorizontalAlignment="Center">
+                                <Image Source="{Binding QrImage}" Width="{Binding QrSize}" Height="{Binding QrSize}" Stretch="Fill"
+                                       SnapsToDevicePixels="True" UseLayoutRounding="True" RenderOptions.BitmapScalingMode="NearestNeighbor" />
                             </Border>
                             <DockPanel Margin="0,12,0,0">
                                 <Button DockPanel.Dock="Right" Style="{StaticResource GhostButton}" Content="Chép link" Click="OnCopyLink" />

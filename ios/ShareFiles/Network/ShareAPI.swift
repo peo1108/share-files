@@ -136,7 +136,7 @@ final class ShareAPI {
         var components = URLComponents(url: baseURL, resolvingAgainstBaseURL: false)!
         components.path = path
         if !query.isEmpty {
-            components.queryItems = query.sorted { $0.key < $1.key }.map { URLQueryItem(name: $0.key, value: $0.value) }
+            components.percentEncodedQuery = TransferPlan.query(query)
         }
         var request = URLRequest(url: components.url!)
         if let token { request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }

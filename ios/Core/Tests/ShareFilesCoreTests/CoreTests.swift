@@ -90,6 +90,14 @@ final class TransferPlanTests: XCTestCase {
         XCTAssertEqual(TransferPlan.uniqueName("noext") { $0 == "noext" }, "noext (1)")
     }
 
+    func testQueryEncodesReservedCharacters() {
+        XCTAssertEqual(
+            TransferPlan.query(["root": "r1", "path": "a+b c&d=f.txt"]),
+            "path=a%2Bb%20c%26d%3Df.txt&root=r1"
+        )
+        XCTAssertEqual(TransferPlan.query(["path": "ảnh"]), "path=%E1%BA%A3nh")
+    }
+
     func testSafeNameStaysInsideItsFolder() {
         XCTAssertEqual(TransferPlan.safeFileName("../../evil.txt"), "evil.txt")
         XCTAssertEqual(TransferPlan.safeFileName("a/b\\c.txt"), "c.txt")

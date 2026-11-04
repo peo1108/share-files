@@ -24,6 +24,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
@@ -164,9 +165,12 @@ class AppState(private val context: Context) : DefaultLifecycleObserver {
     private suspend fun keepConnected() {
         combine(pairedState, foreground, queue.hasActive) { server, visible, active ->
             server?.takeIf { visible || active }
-        }.collectLatest { server ->
+        }.distinctUntilChanged().collectLatest { server ->
+            // A client from an earlier pairing holds a token the PC no longer accepts. Using it would
+            // get a 401 and look as if the PC had revoked this device.
+            currentApi = null
+            suspect = false
             if (server == null) {
-                currentApi = null
                 connectionState.value = Connection.Idle
                 discovery.stop()
                 return@collectLatest

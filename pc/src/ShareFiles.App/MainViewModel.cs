@@ -100,7 +100,10 @@ public sealed class MainViewModel : Observable
     private readonly DispatcherTimer _timer;
     private PairingTicket? _ticket;
     private string _pairLink = "";
+    private const int QrMaxSize = 256;
+
     private BitmapImage? _qrImage;
+    private int _qrSize;
     private string _qrCountdown = "";
     private string _addressText = "";
     private string _statusText = "";
@@ -114,6 +117,7 @@ public sealed class MainViewModel : Observable
     public ObservableCollection<RootViewModel> Roots { get; } = [];
 
     public BitmapImage? QrImage { get => _qrImage; private set => Set(ref _qrImage, value); }
+    public int QrSize { get => _qrSize; private set => Set(ref _qrSize, value); }
     public string QrCountdown { get => _qrCountdown; private set => Set(ref _qrCountdown, value); }
     public string AddressText { get => _addressText; private set => Set(ref _addressText, value); }
     public string StatusText { get => _statusText; private set => Set(ref _statusText, value); }
@@ -171,7 +175,13 @@ public sealed class MainViewModel : Observable
 
         using var generator = new QRCodeGenerator();
         using var data = generator.CreateQrCode(_pairLink, QRCodeGenerator.ECCLevel.L);
-        var png = new PngByteQRCode(data).GetGraphic(8);
+
+        // A whole number of pixels per module keeps every module the same size on screen. Uneven
+        // modules are what makes a camera struggle. The white card around it is the quiet zone.
+        var modules = data.ModuleMatrix.Count - 8;
+        var pixelsPerModule = Math.Max(2, QrMaxSize / modules);
+        QrSize = modules * pixelsPerModule;
+        var png = new PngByteQRCode(data).GetGraphic(pixelsPerModule, drawQuietZones: false);
         var image = new BitmapImage();
         using (var stream = new MemoryStream(png))
         {

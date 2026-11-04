@@ -14,8 +14,10 @@ public sealed class PairingService(TimeProvider time)
 
     public PairingTicket CreateTicket()
     {
+        // 128 bits is plenty for a single-use secret that lives five minutes, and a shorter link
+        // makes a QR code with larger modules, which a camera reads more reliably off a screen.
         var ticket = new PairingTicket(
-            DeviceRegistry.Base64Url(RandomNumberGenerator.GetBytes(32)),
+            DeviceRegistry.Base64Url(RandomNumberGenerator.GetBytes(16)),
             time.GetUtcNow() + Lifetime);
         lock (_lock)
         {

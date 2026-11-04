@@ -227,6 +227,14 @@ class TransfersTest {
     }
 
     @Test
+    fun downloadPath_encodesReservedCharacters() {
+        assertEquals(
+            "/v1/download?root=r1&path=a%2Bb%20c%26d%3Df.txt",
+            ShareApi.downloadPath("r1", "a+b c&d=f.txt"),
+        )
+    }
+
+    @Test
     fun pinning_rejectsWrongFingerprint() {
         server.dispatcher = object : Dispatcher() {
             override fun dispatch(request: RecordedRequest) =

@@ -3,6 +3,8 @@ namespace ShareFiles.Server;
 /// <summary>Read-only pass-through that reports its position and closes the transfer entry on dispose.</summary>
 internal sealed class TrackingStream(Stream inner, TransferMonitor monitor, TransferEntry entry) : Stream
 {
+    private bool _disposed;
+
     public override bool CanRead => true;
     public override bool CanSeek => inner.CanSeek;
     public override bool CanWrite => false;
@@ -38,8 +40,10 @@ internal sealed class TrackingStream(Stream inner, TransferMonitor monitor, Tran
 
     protected override void Dispose(bool disposing)
     {
-        if (disposing)
+        // The file result disposes its stream more than once, and the inner file is closed after the first.
+        if (disposing && !_disposed)
         {
+            _disposed = true;
             monitor.Finish(entry, inner.Position >= inner.Length ? TransferState.Done : TransferState.Interrupted);
             inner.Dispose();
         }

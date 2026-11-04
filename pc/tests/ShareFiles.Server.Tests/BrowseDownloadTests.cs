@@ -118,6 +118,39 @@ public class BrowseDownloadTests
     }
 
     [Fact]
+    public async Task Download_NameWithReservedCharacters()
+    {
+        await using var host = await TestHost.StartAsync();
+        var token = await host.PairAsync();
+        var data = Bytes.Random(100);
+        await File.WriteAllBytesAsync(Path.Combine(host.SharedDir, "a+b c&d=ảnh.txt"), data);
+
+        // Exactly what the clients send: "+" must arrive as a plus, not as a space.
+        var response = await host.SendAsync(HttpMethod.Get,
+            $"/v1/download?root={host.RootId}&path=a%2Bb%20c%26d%3D%E1%BA%A3nh.txt", token);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal(Bytes.Sha(data), Bytes.Sha(await response.Content.ReadAsByteArrayAsync()));
+    }
+
+    [Fact]
+    public async Task Download_FinishesWithoutServerError()
+    {
+        await using var host = await TestHost.StartAsync();
+        var token = await host.PairAsync();
+        await File.WriteAllBytesAsync(Path.Combine(host.SharedDir, "a.bin"), Bytes.Random(1000));
+
+        var response = await host.SendAsync(HttpMethod.Get, $"/v1/download?root={host.RootId}&path=a.bin", token);
+        await response.Content.ReadAsByteArrayAsync();
+        await Task.Delay(200);
+
+        var log = Path.Combine(host.Root, "data", "server.log");
+        Assert.False(File.Exists(log), File.Exists(log) ? await File.ReadAllTextAsync(log) : "");
+        var entry = Assert.Single(host.Server.Monitor.Snapshot());
+        Assert.Equal(TransferState.Done, entry.State);
+    }
+
+    [Fact]
     public async Task Speedtest_ExactBytes()
     {
         await using var host = await TestHost.StartAsync();

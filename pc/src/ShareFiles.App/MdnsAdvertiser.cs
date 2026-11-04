@@ -50,19 +50,13 @@ public sealed class MdnsAdvertiser : IDisposable
         [MarshalAs(UnmanagedType.LPArray, ArraySubType = UnmanagedType.LPWStr)] string[] values);
 
     [DllImport("dnsapi.dll")]
-    private static extern void DnsServiceFreeInstance(IntPtr instance);
-
-    [DllImport("dnsapi.dll")]
     private static extern uint DnsServiceRegister(ref RegisterRequest request, IntPtr cancel);
 
     [DllImport("dnsapi.dll")]
     private static extern uint DnsServiceDeRegister(ref RegisterRequest request, IntPtr cancel);
 
     // Windows keeps calling this after registering, so it must outlive every request.
-    private readonly RegisterComplete _callback = (_, _, instance) =>
-    {
-        if (instance != IntPtr.Zero) DnsServiceFreeInstance(instance);
-    };
+    private readonly RegisterComplete _callback = (_, _, _) => { };
 
     private readonly object _lock = new();
     private RegisterRequest _request;
@@ -99,8 +93,10 @@ public sealed class MdnsAdvertiser : IDisposable
                 CompletionCallback = Marshal.GetFunctionPointerForDelegate(_callback),
             };
 
+            // The instance is deliberately never freed. DnsServiceDeRegister reads it again later and
+            // completes asynchronously, so there is no safe moment to free it. It is a few hundred
+            // bytes per network change, which beats a use-after-free in the OS API.
             var result = DnsServiceRegister(ref _request, IntPtr.Zero);
-            DnsServiceFreeInstance(instance);
             _registered = result == RequestPending;
             Error = _registered ? null : $"Không quảng bá được mDNS (mã {result})";
         }

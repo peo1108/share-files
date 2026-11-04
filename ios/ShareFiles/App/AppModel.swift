@@ -29,6 +29,7 @@ final class AppModel: ObservableObject {
 
     private(set) var api: ShareAPI?
     private var loop: Task<Void, Never>?
+    private var loopSession: URLSession?
     private var isVisible = true
     private var suspect = false
     private var discoveredHosts: [String: String] = [:]
@@ -92,6 +93,7 @@ final class AppModel: ObservableObject {
         }
         discovery.start()
         let session = PinnedSession.make(fingerprint: server.fingerprint)
+        loopSession = session
         loop = Task { [weak self] in
             await self?.connectionLoop(serverId: server.serverId, session: session)
         }
@@ -103,6 +105,9 @@ final class AppModel: ObservableObject {
         discovery.stop()
         api = nil
         connection = .idle
+        // Transfers already running on this session are allowed to finish.
+        loopSession?.finishTasksAndInvalidate()
+        loopSession = nil
     }
 
     private func connectionLoop(serverId: String, session: URLSession) async {

@@ -90,15 +90,12 @@ final class TransferStore: ObservableObject {
     }
 
     func addDownload(root: String, path: String, name: String, size: Int64) {
-        var components = URLComponents()
-        components.path = "/v1/download"
-        components.queryItems = [URLQueryItem(name: "root", value: root), URLQueryItem(name: "path", value: path)]
         add([TransferItem(
             id: UUID().uuidString,
             direction: .download,
             name: name,
             size: size,
-            remotePath: components.string
+            remotePath: "/v1/download?" + TransferPlan.query(["root": root, "path": path])
         )])
     }
 
