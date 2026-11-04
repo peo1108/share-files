@@ -102,4 +102,21 @@ Cửa sổ PC: cột trái gồm trạng thái server, QR ghép đôi, danh sác
 - `.github/workflows/pc.yml`: test và publish bản PC.
 - `.github/workflows/android.yml`: test và build APK.
 - `.github/workflows/ios.yml`: XcodeGen, `swift test`, build IPA chưa ký.
-- Sinh keystore debug cố định không đưa vào repo; APK dùng để cài tay.
+- APK ký bằng khoá trong GitHub Secrets nếu có, nếu không thì bằng khoá debug tạo mới mỗi lần chạy (xem README). Khoá không bao giờ nằm trong repo.
+
+## Trạng thái kiểm chứng (2026-11-05)
+
+Đã kiểm chứng:
+
+- Server: 53 test tích hợp qua TLS. Throughput qua TLS trên localhost cao hơn mức tối đa của dây 2.5G (1.2 GB/s từ RAM, 365 MB/s khi ghi đĩa).
+- Android: 21 test JVM. Chạy trên AVD với server thật: ghép đôi qua deep link, duyệt, tải về, gửi lên, PC gửi sang qua hàng chờ, chạy tiếp sau khi tắt hẳn app PC giữa chừng, đo tốc độ. SHA-256 khớp ở mọi lần chuyển file.
+- iOS: biên dịch được cho thiết bị thật trên GitHub Actions, 18 test logic.
+- PC: quảng bá mDNS đọc được từ một client khác trên cùng máy, QR đọc được qua ảnh chụp màn hình, lần chạy đầu của bản Release.
+
+Chưa kiểm chứng, vì không có thiết bị thật:
+
+- App iOS chưa từng được chạy, kể cả giao diện.
+- Chưa có số đo tốc độ thật qua WiFi. AVD đi qua NAT của emulator nên không đại diện.
+- Điện thoại thật tìm PC qua mDNS, quét QR bằng camera thật.
+- Android tiếp tục chuyển file khi nằm nền.
+- Kéo thả file vào cửa sổ PC và menu khay hệ thống. Hàng chờ được thử bằng cách ghi trực tiếp `outbox.json`.

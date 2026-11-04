@@ -18,7 +18,7 @@ QR hoặc deep link:
 sharefiles://pair?id=<serverId>&name=<tên PC>&fp=<fingerprint>&secret=<base64url>&port=48920&addrs=192.168.50.211,10.0.2.2
 ```
 
-`secret` dùng một lần, hết hạn sau 5 phút. Client kết nối tới Bonjour hoặc từng địa chỉ trong `addrs`, pin theo `fp`, rồi gọi `POST /v1/pair`.
+`secret` dài 128 bit, dùng một lần, hết hạn sau 5 phút. Client kết nối tới Bonjour hoặc từng địa chỉ trong `addrs`, pin theo `fp`, rồi gọi `POST /v1/pair`.
 
 ## Xác thực
 

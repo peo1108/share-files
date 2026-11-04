@@ -1,6 +1,6 @@
 # Share Files Implementation Plan
 
-> **For agentic workers:** Chủ repo đã uỷ quyền tự chốt, thực thi inline theo superpowers:executing-plans. Steps dùng checkbox (`- [ ]`).
+> **For agentic workers:** Chủ repo đã uỷ quyền tự chốt, thực thi inline theo superpowers:executing-plans. Steps dùng checkbox (`- [x]`).
 
 **Goal:** Ba app native (Windows, Android, iOS) chuyển file trực tiếp qua LAN nhà.
 
@@ -34,12 +34,12 @@
 
 **Produces:** `ShareServer.StartAsync/StopAsync`, `PairingService.CreateTicket()`, `OutboxStore.Enqueue(deviceId, path)`, sự kiện `ShareServer.TransferChanged`.
 
-- [ ] Viết test tích hợp qua TLS trên cổng ngẫu nhiên: `Info_NoAuth`, `Pair_SecretOneUse`, `Pair_Expired`, `Auth_Missing401`, `Auth_RevokedToken401`, `Browse_ListsDirsFirst`, `Browse_TraversalForbidden`, `Download_Range`, `Upload_Complete`, `Upload_ResumeAfterAbort`, `Upload_OffsetMismatch409`, `Upload_DuplicateNameGetsSuffix`, `Upload_SanitizesName`, `Upload_EmptyFile`, `Outbox_ListDownloadAck`, `Outbox_SourceGone410`, `Outbox_OnlyOwnDevice`, `Speedtest_ExactBytes`.
-- [ ] Chạy `dotnet test`, xác nhận fail vì chưa có code.
-- [ ] Viết code server.
-- [ ] Chạy `dotnet test`, xác nhận pass.
-- [ ] Đo throughput localhost qua TLS để chắc server không phải nút cổ chai.
-- [ ] Commit.
+- [x] Viết test tích hợp qua TLS trên cổng ngẫu nhiên: `Info_NoAuth`, `Pair_SecretOneUse`, `Pair_Expired`, `Auth_Missing401`, `Auth_RevokedToken401`, `Browse_ListsDirsFirst`, `Browse_TraversalForbidden`, `Download_Range`, `Upload_Complete`, `Upload_ResumeAfterAbort`, `Upload_OffsetMismatch409`, `Upload_DuplicateNameGetsSuffix`, `Upload_SanitizesName`, `Upload_EmptyFile`, `Outbox_ListDownloadAck`, `Outbox_SourceGone410`, `Outbox_OnlyOwnDevice`, `Speedtest_ExactBytes`.
+- [x] Chạy `dotnet test`, xác nhận fail vì chưa có code.
+- [x] Viết code server.
+- [x] Chạy `dotnet test`, xác nhận pass.
+- [x] Đo throughput localhost qua TLS để chắc server không phải nút cổ chai.
+- [x] Commit.
 
 ### Task 2: App Windows (`pc/src/ShareFiles.App`)
 
@@ -47,10 +47,10 @@
 
 **Consumes:** API của Task 1.
 
-- [ ] Viết `MdnsAdvertiser` bằng `DnsServiceRegister`, kiểm chứng bằng Python `zeroconf`.
-- [ ] Viết WPF UI: QR, thiết bị, kéo thả, danh sách chuyển, thư mục.
-- [ ] Chạy thật, chụp màn hình kiểm tra.
-- [ ] Commit.
+- [x] Viết `MdnsAdvertiser` bằng `DnsServiceRegister`, kiểm chứng bằng Python `zeroconf`.
+- [x] Viết WPF UI: QR, thiết bị, kéo thả, danh sách chuyển, thư mục.
+- [x] Chạy thật, chụp màn hình kiểm tra.
+- [x] Commit.
 
 ### Task 3: App Android (`android/`)
 
@@ -58,25 +58,25 @@
 
 **Consumes:** Hợp đồng ở `protocol/PROTOCOL.md`.
 
-- [ ] Viết test JVM với MockWebServer: `PairLink_Parse`, `Upload_ResumesFromServerOffset`, `Download_ResumesWithRange`, `Pinning_RejectsWrongFingerprint`.
-- [ ] Chạy test, xác nhận fail.
-- [ ] Viết core, chạy test pass.
-- [ ] Viết service và UI Compose.
-- [ ] Chạy trên AVD `CamY700Gen5` với server thật, thử ghép đôi qua deep link, gửi, duyệt, tải, chụp màn hình.
-- [ ] Commit.
+- [x] Viết test JVM với MockWebServer: `PairLink_Parse`, `Upload_ResumesFromServerOffset`, `Download_ResumesWithRange`, `Pinning_RejectsWrongFingerprint`.
+- [x] Chạy test, xác nhận fail.
+- [x] Viết core, chạy test pass.
+- [x] Viết service và UI Compose.
+- [x] Chạy trên AVD `CamY700Gen5` với server thật, thử ghép đôi qua deep link, gửi, duyệt, tải, chụp màn hình.
+- [x] Commit.
 
 ### Task 4: App iOS (`ios/`)
 
 **Files:** `project.yml`, `Package.swift`, `Sources/ShareFilesCore` (logic), `ShareFiles/` (SwiftUI), `Tests/`.
 
-- [ ] Viết test `swift test`: `PairLinkParsing`, `SpeedMeter`, `TransferPlan`.
-- [ ] Viết core và UI theo cùng hợp đồng và màn hình như Android.
-- [ ] Viết `.github/workflows/ios.yml`, build trên GitHub Actions tới khi xanh.
-- [ ] Commit.
+- [x] Viết test `swift test`: `PairLinkParsing`, `SpeedMeter`, `TransferPlan`.
+- [x] Viết core và UI theo cùng hợp đồng và màn hình như Android.
+- [x] Viết `.github/workflows/ios.yml`, build trên GitHub Actions tới khi xanh.
+- [x] Commit.
 
 ### Task 5: Hoàn thiện
 
-- [ ] `android.yml`, sửa `pc.yml` nếu cần, README hướng dẫn cài và ghép đôi.
-- [ ] Toàn bộ CI xanh, có artifact tải được.
-- [ ] Chạy bước review toàn repo và sửa lỗi tìm được.
-- [ ] Commit, push.
+- [x] `android.yml`, sửa `pc.yml` nếu cần, README hướng dẫn cài và ghép đôi.
+- [x] Toàn bộ CI xanh, có artifact tải được.
+- [x] Chạy bước review toàn repo và sửa lỗi tìm được.
+- [x] Commit, push.
