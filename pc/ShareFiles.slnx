@@ -1,5 +1,6 @@
 <Solution>
   <Folder Name="/src/">
+    <Project Path="src/ShareFiles.App/ShareFiles.App.csproj" />
     <Project Path="src/ShareFiles.Server/ShareFiles.Server.csproj" />
   </Folder>
   <Folder Name="/tests/">
