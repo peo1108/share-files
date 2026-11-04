@@ -94,6 +94,8 @@ Thư mục đứng trước, rồi theo tên. Symlink và junction bị bỏ qua
 
 Trả nội dung file, hỗ trợ `Range`, có `ETag`.
 
+File từ 32 MiB trở lên được client chia làm 4 đoạn và tải song song, mỗi đoạn một request `Range: bytes=<đầu>-<cuối>`, vì một luồng TCP không dùng hết Wi-Fi nhanh. Request đầu tiên cho biết `ETag`, các request sau gửi kèm `If-Range` với giá trị đó. Server nhận `200` thay vì `206` nghĩa là file trên PC đã đổi, client phải bỏ phần đã tải. Trên PC, các request song song của cùng một file gộp thành một dòng trong danh sách chuyển.
+
 ### `POST /v1/uploads`
 
 ```json

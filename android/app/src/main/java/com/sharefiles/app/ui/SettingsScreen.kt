@@ -1,6 +1,10 @@
 package com.sharefiles.app.ui
 
+import android.content.Context
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -14,6 +18,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -30,11 +35,14 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -50,6 +58,11 @@ import kotlinx.coroutines.launch
 
 /** Full scale of the gauge: what a 2.5 Gbps cable can carry. */
 private const val GAUGE_MAX_BYTES_PER_SECOND = 312_500_000.0
+
+private const val PREF_SPEED_IN_BITS = "speed_in_bits"
+
+private fun formatRate(bytesPerSecond: Double, inBits: Boolean) =
+    if (inBits) formatBitrate(bytesPerSecond) else formatSpeed(bytesPerSecond)
 
 @Composable
 fun SettingsScreen(state: AppState, wide: Boolean) {
@@ -139,9 +152,17 @@ private fun SpeedTestCard(state: AppState) {
     var downloadResult by remember { mutableStateOf<Double?>(null) }
     var uploadResult by remember { mutableStateOf<Double?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
+    val prefs = LocalContext.current.getSharedPreferences("share_files", Context.MODE_PRIVATE)
+    var inBits by remember { mutableStateOf(prefs.getBoolean(PREF_SPEED_IN_BITS, false)) }
 
     Column(Modifier.fillMaxWidth().glass().padding(18.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-        SectionTitle("Đo tốc độ tới PC", Modifier.fillMaxWidth())
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            SectionTitle("Đo tốc độ tới PC", Modifier.weight(1f))
+            UnitToggle(inBits) {
+                inBits = it
+                prefs.edit().putBoolean(PREF_SPEED_IN_BITS, it).apply()
+            }
+        }
         Spacer(Modifier.height(2.dp))
         Text(
             "Chỉ đo đường truyền, không đụng tới ổ đĩa",
@@ -155,19 +176,19 @@ private fun SpeedTestCard(state: AppState) {
             Gauge((live / GAUGE_MAX_BYTES_PER_SECOND).toFloat())
             Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(top = 26.dp)) {
                 Text(
-                    "%.0f".format(live / 1_000_000),
+                    "%.0f".format(if (inBits) live * 8 / 1_000_000 else live / 1_000_000),
                     color = Palette.Text,
                     fontSize = 46.sp,
                     fontWeight = FontWeight.Bold,
                 )
-                Text("MB/s", color = Palette.Subtle, fontSize = 14.sp)
+                Text(if (inBits) "Mbps" else "MB/s", color = Palette.Subtle, fontSize = 14.sp)
                 Text(if (running) phase else " ", color = Palette.Amber, fontSize = 12.sp)
             }
         }
 
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            ResultTile("Tải về máy", downloadResult, Modifier.weight(1f))
-            ResultTile("Gửi lên PC", uploadResult, Modifier.weight(1f))
+            ResultTile("Tải về máy", downloadResult, inBits, Modifier.weight(1f))
+            ResultTile("Gửi lên PC", uploadResult, inBits, Modifier.weight(1f))
         }
 
         error?.let {
@@ -199,9 +220,9 @@ private fun SpeedTestCard(state: AppState) {
                     phase = "Đang đo gửi lên"
                     uploadResult = test.upload { live = it }
                     AppLog.add(
-                        "Đo tốc độ: tải về %.0f MB/s, gửi lên %.0f MB/s".format(
-                            (downloadResult ?: 0.0) / 1_000_000,
-                            (uploadResult ?: 0.0) / 1_000_000,
+                        "Đo tốc độ: tải về %s, gửi lên %s".format(
+                            formatRate(downloadResult ?: 0.0, inBits),
+                            formatRate(uploadResult ?: 0.0, inBits),
                         ),
                     )
                 } catch (e: IOException) {
@@ -218,18 +239,43 @@ private fun SpeedTestCard(state: AppState) {
 }
 
 @Composable
-private fun ResultTile(label: String, bytesPerSecond: Double?, modifier: Modifier) {
+private fun ResultTile(label: String, bytesPerSecond: Double?, inBits: Boolean, modifier: Modifier) {
     Column(modifier.glass(16).padding(12.dp)) {
         Text(label, color = Palette.Subtle, fontSize = 12.sp)
         Spacer(Modifier.height(3.dp))
         Text(
-            bytesPerSecond?.let(::formatSpeed) ?: "—",
+            bytesPerSecond?.let { formatRate(it, inBits) } ?: "—",
             color = Palette.Text,
             fontSize = 18.sp,
             fontWeight = FontWeight.SemiBold,
         )
         if (bytesPerSecond != null) {
-            Text("%.2f Gbps".format(bytesPerSecond * 8 / 1e9), color = Palette.Faint, fontSize = 11.sp)
+            Text(formatRate(bytesPerSecond, !inBits), color = Palette.Faint, fontSize = 11.sp)
+        }
+    }
+}
+
+/** MB/s for comparing with file copies, Mbps for comparing with router and Wi-Fi link rates. */
+@Composable
+private fun UnitToggle(inBits: Boolean, onChange: (Boolean) -> Unit) {
+    val shape = RoundedCornerShape(10.dp)
+    Row(Modifier.clip(shape).background(Palette.Card).border(1.dp, Palette.CardBorder, shape).padding(3.dp)) {
+        listOf(false to "MB/s", true to "Mbps").forEach { (bits, label) ->
+            val selected = bits == inBits
+            Box(
+                Modifier
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(if (selected) Palette.Violet else Color.Transparent)
+                    .clickable { onChange(bits) }
+                    .padding(horizontal = 10.dp, vertical = 5.dp),
+            ) {
+                Text(
+                    label,
+                    color = if (selected) Palette.Text else Palette.Subtle,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.SemiBold,
+                )
+            }
         }
     }
 }

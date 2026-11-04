@@ -71,10 +71,55 @@ class TransfersTest {
             stored.reset()
         }
         override fun openForAppend(): OutputStream = stored
+        override fun openForWrite(): PositionalWriter = throw UnsupportedOperationException()
         override fun commit() {
             committed = true
         }
     }
+
+    private class PartsSink(size: Int, var extent: Long = 0) : DownloadSink {
+        val stored = ByteArray(size)
+        var committed = false
+        var resets = 0
+        override fun length() = extent
+        override fun reset() {
+            resets++
+            stored.fill(0)
+            extent = 0
+        }
+        override fun openForAppend(): OutputStream = throw UnsupportedOperationException()
+        override fun openForWrite() = object : PositionalWriter {
+            override fun write(position: Long, buffer: ByteArray, length: Int) {
+                synchronized(stored) {
+                    buffer.copyInto(stored, position.toInt(), 0, length)
+                    extent = maxOf(extent, position + length)
+                }
+            }
+            override fun close() {}
+        }
+        override fun commit() {
+            committed = true
+        }
+    }
+
+    /** Serves [data] the way the PC does: ranges, ETag, and a full body when If-Range is stale. */
+    private fun rangeServer(data: ByteArray, etag: String, requests: MutableList<String>) =
+        object : Dispatcher() {
+            override fun dispatch(request: RecordedRequest): MockResponse {
+                val range = request.headers["Range"]
+                synchronized(requests) { requests += range.orEmpty() }
+                val ifRange = request.headers["If-Range"]
+                if (range == null || (ifRange != null && ifRange != etag)) {
+                    return MockResponse.Builder().code(200).headers(headersOf("ETag", etag)).body(Buffer().write(data)).build()
+                }
+                val (from, to) = range.removePrefix("bytes=").split("-").map { it.toInt() }
+                return MockResponse.Builder()
+                    .code(206)
+                    .headers(headersOf("ETag", etag, "Content-Range", "bytes $from-$to/${data.size}"))
+                    .body(Buffer().write(data, from, to - from + 1))
+                    .build()
+            }
+        }
 
     private fun jsonResponse(body: String, code: Int = 200) = MockResponse(
         code = code,
@@ -205,6 +250,72 @@ class TransfersTest {
 
         assertTrue(failure is IOException)
         assertEquals(false, sink.committed)
+    }
+
+    @Test
+    fun download_largeFileInParallelParts() = runTest {
+        val data = ByteArray(10_000) { (it * 31).toByte() }
+        val requests = mutableListOf<String>()
+        server.dispatcher = rangeServer(data, "\"v1\"", requests)
+        val sink = PartsSink(data.size)
+        var saved: List<Long>? = null
+        var tag: String? = null
+
+        Transfers(api(), parallelMinBytes = 1000)
+            .download("/x", data.size.toLong(), null, sink, { tag = it }, null, { saved = it }) {}
+
+        assertArrayEquals(data, sink.stored)
+        assertTrue(sink.committed)
+        assertEquals("\"v1\"", tag)
+        assertEquals(listOf("bytes=0-2499", "bytes=2500-4999", "bytes=5000-7499", "bytes=7500-9999"), requests.sorted())
+        assertEquals(listOf(2500L, 2500L, 2500L, 2500L), saved)
+    }
+
+    @Test
+    fun download_partsResumeWhereEachStopped() = runTest {
+        val data = ByteArray(10_000) { (it * 7).toByte() }
+        val requests = mutableListOf<String>()
+        server.dispatcher = rangeServer(data, "\"v1\"", requests)
+        val sink = PartsSink(data.size, extent = data.size.toLong())
+        data.copyInto(sink.stored, 0, 0, 2500)
+        data.copyInto(sink.stored, 2500, 2500, 3000)
+        data.copyInto(sink.stored, 7500, 7500, 10_000)
+
+        Transfers(api(), parallelMinBytes = 1000)
+            .download("/x", data.size.toLong(), "\"v1\"", sink, {}, listOf(2500L, 500L, 0L, 2500L)) {}
+
+        assertArrayEquals(data, sink.stored)
+        assertEquals(listOf("bytes=3000-4999", "bytes=5000-7499"), requests.sorted())
+    }
+
+    @Test
+    fun download_partsStartOverWhenFileChanged() = runTest {
+        val data = ByteArray(10_000) { it.toByte() }
+        server.dispatcher = rangeServer(data, "\"v2\"", mutableListOf())
+        val sink = PartsSink(data.size)
+        var saved: List<Long>? = null
+        var tag: String? = null
+
+        assertThrows(IOException::class.java) {
+            kotlinx.coroutines.runBlocking {
+                Transfers(api(), parallelMinBytes = 1000).download(
+                    "/x", data.size.toLong(), "\"v1\"", sink, { tag = it }, listOf(2500L, 100L, 0L, 0L), { saved = it },
+                ) {}
+            }
+        }
+
+        assertEquals(1, sink.resets)
+        assertEquals(false, sink.committed)
+        assertEquals("\"v2\"", tag)
+        assertEquals(listOf(0L, 0L, 0L, 0L), saved)
+    }
+
+    @Test
+    fun splitRanges_coversEveryByteOnce() {
+        val ranges = splitRanges(10_001, 4)
+        assertEquals(0L, ranges.first().first)
+        assertEquals(10_000L, ranges.last().last)
+        ranges.zipWithNext().forEach { (a, b) -> assertEquals(a.last + 1, b.first) }
     }
 
     @Test

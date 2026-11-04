@@ -23,12 +23,14 @@ struct TransferItem: Codable, Identifiable, Equatable {
     var remotePath: String?
     var outboxId: String?
     var etag: String?
+    /// Download: bytes held of each range when a large file is fetched in parts.
+    var parts: [Int64]?
     /// Download: file name under Storage.received once complete.
     var savedName: String?
     var speed: Double = 0
 
     private enum CodingKeys: String, CodingKey {
-        case id, direction, name, size, state, transferred, error, stagedFolder, modifiedAt, remotePath, outboxId, etag, savedName
+        case id, direction, name, size, state, transferred, error, stagedFolder, modifiedAt, remotePath, outboxId, etag, parts, savedName
     }
 
     var isActive: Bool { state == .queued || state == .running || state == .waiting }
@@ -190,12 +192,23 @@ final class TransferStore: ObservableObject {
                 case .upload:
                     try await Self.runUpload(item, api: api, progress: progress)
                 case .download:
-                    let saved = try await Self.runDownload(item, api: api, progress: progress) { etag in
-                        Task { @MainActor in
-                            self?.change(id) { $0.etag = etag }
-                            self?.persist()
+                    let saved = try await Self.runDownload(
+                        item,
+                        api: api,
+                        progress: progress,
+                        onEtag: { etag in
+                            Task { @MainActor in
+                                self?.change(id) { $0.etag = etag }
+                                self?.persist()
+                            }
+                        },
+                        onParts: { parts in
+                            Task { @MainActor in
+                                self?.change(id) { $0.parts = parts }
+                                self?.persist()
+                            }
                         }
-                    }
+                    )
                     self?.change(id) { $0.savedName = saved }
                 }
                 self?.finish(id)
@@ -224,7 +237,11 @@ final class TransferStore: ObservableObject {
     }
 
     private static func runDownload(
-        _ item: TransferItem, api: ShareAPI, progress: ProgressBox, onEtag: @escaping (String) -> Void
+        _ item: TransferItem,
+        api: ShareAPI,
+        progress: ProgressBox,
+        onEtag: @escaping (String) -> Void,
+        onParts: @escaping ([Int64]) -> Void
     ) async throws -> String {
         let partial = Storage.partial.appendingPathComponent(item.id + ".part")
         try await TransferRunner.download(
@@ -232,9 +249,11 @@ final class TransferStore: ObservableObject {
             path: item.remotePath ?? "",
             size: item.size,
             etag: item.etag,
+            parts: item.parts,
             partial: partial,
             progress: progress,
-            onEtag: onEtag
+            onEtag: onEtag,
+            onParts: onParts
         )
 
         let folder = Storage.received

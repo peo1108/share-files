@@ -147,12 +147,13 @@ internal static class Endpoints
     private static IResult SendFile(ShareServer server, HttpContext context, string file, string displayName)
     {
         var info = new FileInfo(file);
-        var entry = server.Monitor.Track(
+        var etag = new EntityTagHeaderValue($"\"{info.Length:x}-{info.LastWriteTimeUtc.Ticks:x}\"");
+        var entry = server.Monitor.TrackDownload(
             $"dl:{Device(context).DeviceId}:{file}",
             Device(context).Name,
-            TransferDirection.FromPc,
             displayName,
-            info.Length);
+            info.Length,
+            RequestedBytes(context.Request, info.Length, etag));
         var stream = new FileStream(file, FileMode.Open, FileAccess.Read, FileShare.Read | FileShare.Delete,
             FileBufferSize, FileOptions.Asynchronous | FileOptions.SequentialScan);
 
@@ -160,8 +161,35 @@ internal static class Endpoints
             new TrackingStream(stream, server.Monitor, entry),
             "application/octet-stream",
             lastModified: info.LastWriteTimeUtc,
-            entityTag: new EntityTagHeaderValue($"\"{info.Length:x}-{info.LastWriteTimeUtc.Ticks:x}\""),
+            entityTag: etag,
             enableRangeProcessing: true);
+    }
+
+    /// <summary>How many bytes this request will be sent, following the same rules as range processing.</summary>
+    private static long RequestedBytes(HttpRequest request, long length, EntityTagHeaderValue etag)
+    {
+        var headers = request.GetTypedHeaders();
+        if (headers.Range is not { Ranges.Count: 1 } range) return length;
+        // A stale validator makes range processing send the whole file.
+        if (headers.IfRange?.EntityTag is { } tag && !tag.Compare(etag, useStrongComparison: true)) return length;
+
+        var item = range.Ranges.First();
+        long start, end;
+        if (item.From is { } from)
+        {
+            start = from;
+            end = Math.Min(item.To ?? length - 1, length - 1);
+        }
+        else if (item.To is { } suffix)
+        {
+            start = Math.Max(0, length - suffix);
+            end = length - 1;
+        }
+        else
+        {
+            return length;
+        }
+        return start > end ? 0 : end - start + 1;
     }
 
     private static void MapUploads(RouteGroupBuilder api, ShareServer server)

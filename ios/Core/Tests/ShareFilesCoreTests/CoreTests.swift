@@ -125,10 +125,30 @@ final class ModelsTests: XCTestCase {
         XCTAssertEqual(try JSONDecoder().decode(ApiErrorBody.self, from: Data(json.utf8)).offset, 400)
     }
 
+    func testSplitsRangesCoveringEveryByteOnce() {
+        let ranges = TransferPlan.splitRanges(size: 10_001, count: 4)
+        XCTAssertEqual(ranges.first?.lowerBound, 0)
+        XCTAssertEqual(ranges.last?.upperBound, 10_000)
+        for (a, b) in zip(ranges, ranges.dropFirst()) {
+            XCTAssertEqual(a.upperBound + 1, b.lowerBound)
+        }
+    }
+
+    func testFetchesInPartsOnlyWhenLargeAndFresh() {
+        let big = TransferPlan.parallelMinBytes
+        XCTAssertTrue(TransferPlan.fetchesInParts(size: big, stored: 0, parts: nil))
+        XCTAssertFalse(TransferPlan.fetchesInParts(size: big - 1, stored: 0, parts: nil))
+        XCTAssertFalse(TransferPlan.fetchesInParts(size: big, stored: 100, parts: nil))
+        XCTAssertTrue(TransferPlan.fetchesInParts(size: big, stored: 100, parts: [1, 2, 3, 4]))
+    }
+
     func testFormatsBytes() {
         XCTAssertEqual(ByteFormat.bytes(Int64(999)), "999 B")
         XCTAssertEqual(ByteFormat.bytes(Int64(1_500)), "1,5 KB")
         XCTAssertEqual(ByteFormat.bytes(Int64(250_000_000)), "250 MB")
         XCTAssertEqual(ByteFormat.speed(185_000_000), "185 MB/s")
+        XCTAssertEqual(ByteFormat.bitrate(185_000_000), "1480 Mbps")
+        XCTAssertEqual(ByteFormat.bitrate(5_000_000), "40,0 Mbps")
+        XCTAssertEqual(ByteFormat.rate(185_000_000, inBits: false), "185 MB/s")
     }
 }

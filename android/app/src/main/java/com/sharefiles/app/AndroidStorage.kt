@@ -9,12 +9,14 @@ import android.provider.MediaStore
 import android.provider.OpenableColumns
 import android.webkit.MimeTypeMap
 import com.sharefiles.app.core.DownloadSink
+import com.sharefiles.app.core.PositionalWriter
 import com.sharefiles.app.core.UploadSource
 import java.io.FileNotFoundException
 import java.io.FileOutputStream
 import java.io.IOException
 import java.io.InputStream
 import java.io.OutputStream
+import java.nio.ByteBuffer
 import java.time.Instant
 
 /** A file picked on the device that cannot be read any more. Retrying will not help. */
@@ -126,6 +128,23 @@ class MediaStoreSink(
         val stream = ParcelFileDescriptor.AutoCloseOutputStream(descriptor) as FileOutputStream
         stream.channel.position(stream.channel.size())
         return stream
+    }
+
+    override fun openForWrite(): PositionalWriter {
+        val current = ensureEntry()
+        val descriptor = resolver.openFileDescriptor(current, "rw") ?: throw IOException("Không ghi được file")
+        val stream = ParcelFileDescriptor.AutoCloseOutputStream(descriptor)
+        val channel = stream.channel
+        return object : PositionalWriter {
+            // Positional channel writes do not move a shared position, so parts can write at once.
+            override fun write(position: Long, buffer: ByteArray, length: Int) {
+                val data = ByteBuffer.wrap(buffer, 0, length)
+                var at = position
+                while (data.hasRemaining()) at += channel.write(data, at)
+            }
+
+            override fun close() = stream.close()
+        }
     }
 
     override fun commit() {

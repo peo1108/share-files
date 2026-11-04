@@ -1,9 +1,11 @@
 import Foundation
 
-/// Measures the network path with data held in memory, so storage speed plays no part.
+/// Measures the network path with data held in memory, so storage speed plays no part. Several
+/// streams run at once, the way large downloads do, because one TCP stream does not fill fast Wi-Fi.
 final class SpeedTest {
     private static let duration = 7.0
     private static let rampUp = 1.0
+    private static let streams = TransferPlan.downloadParts
     private static let maxBytes: Int64 = 4 * 1024 * 1024 * 1024
     private static let uploadChunk = 128 * 1024 * 1024
 
@@ -15,26 +17,43 @@ final class SpeedTest {
 
     /// Returns bytes per second. [onSpeed] gets live readings on an arbitrary thread.
     func download(onSpeed: @escaping (Double) -> Void) async throws -> Double {
-        let request = api.makeRequest("/v1/speedtest/download", query: ["bytes": String(Self.maxBytes)])
-        let probe = Probe(limit: Self.duration, rampUp: Self.rampUp, onSpeed: onSpeed)
-        try await probe.runDownload(session: api.session, request: request)
-        return probe.average
+        let clock = SpeedClock(limit: Self.duration, rampUp: Self.rampUp, onSpeed: onSpeed)
+        let api = self.api
+        try await withThrowingTaskGroup(of: Void.self) { group in
+            for _ in 0..<Self.streams {
+                let request = api.makeRequest("/v1/speedtest/download", query: ["bytes": String(Self.maxBytes)])
+                group.addTask {
+                    try await Probe(clock: clock).run(api.session.dataTask(with: request))
+                }
+            }
+            try await group.waitForAll()
+        }
+        return clock.average
     }
 
     func upload(onSpeed: @escaping (Double) -> Void) async throws -> Double {
-        let probe = Probe(limit: Self.duration, rampUp: Self.rampUp, onSpeed: onSpeed)
+        let clock = SpeedClock(limit: Self.duration, rampUp: Self.rampUp, onSpeed: onSpeed)
+        let api = self.api
         let payload = Data(count: Self.uploadChunk)
-        while !probe.finished {
-            try Task.checkCancellation()
-            var request = api.makeRequest("/v1/speedtest/upload")
-            request.httpMethod = "POST"
-            try await probe.runUpload(session: api.session, request: request, payload: payload)
+        try await withThrowingTaskGroup(of: Void.self) { group in
+            for _ in 0..<Self.streams {
+                group.addTask {
+                    while !clock.finished {
+                        try Task.checkCancellation()
+                        var request = api.makeRequest("/v1/speedtest/upload")
+                        request.httpMethod = "POST"
+                        try await Probe(clock: clock).run(api.session.uploadTask(with: request, from: payload))
+                    }
+                }
+            }
+            try await group.waitForAll()
         }
-        return probe.average
+        return clock.average
     }
 }
 
-private final class Probe: NSObject, URLSessionDataDelegate, @unchecked Sendable {
+/// Shared by all streams of one measurement. Skips the ramp-up when averaging.
+private final class SpeedClock: @unchecked Sendable {
     private let limit: Double
     private let rampUp: Double
     private let onSpeed: (Double) -> Void
@@ -45,9 +64,6 @@ private final class Probe: NSObject, URLSessionDataDelegate, @unchecked Sendable
     private var measuredBytes: Int64 = 0
     private var measuredFrom = -1.0
     private var lastReport = 0.0
-    private var lastSent: Int64 = 0
-    private var continuation: CheckedContinuation<Void, Error>?
-    private var stoppedByUs = false
 
     init(limit: Double, rampUp: Double, onSpeed: @escaping (Double) -> Void) {
         self.limit = limit
@@ -66,30 +82,7 @@ private final class Probe: NSObject, URLSessionDataDelegate, @unchecked Sendable
         return measuredFrom < 0 || seconds <= 0 ? 0 : Double(measuredBytes) / seconds
     }
 
-    func runDownload(session: URLSession, request: URLRequest) async throws {
-        let task = session.dataTask(with: request)
-        try await run(task)
-    }
-
-    func runUpload(session: URLSession, request: URLRequest, payload: Data) async throws {
-        lastSent = 0
-        let task = session.uploadTask(with: request, from: payload)
-        try await run(task)
-    }
-
-    private func run(_ task: URLSessionTask) async throws {
-        task.delegate = self
-        try await withTaskCancellationHandler {
-            try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
-                self.continuation = continuation
-                task.resume()
-            }
-        } onCancel: {
-            task.cancel()
-        }
-    }
-
-    private func add(_ bytes: Int64) {
+    func add(_ bytes: Int64) {
         lock.lock()
         total += bytes
         let now = elapsed
@@ -104,11 +97,34 @@ private final class Probe: NSObject, URLSessionDataDelegate, @unchecked Sendable
         lock.unlock()
         if let report { onSpeed(report) }
     }
+}
+
+/// One stream: runs a task, feeds the shared clock, and stops the task when time is up.
+private final class Probe: NSObject, URLSessionDataDelegate, @unchecked Sendable {
+    private let clock: SpeedClock
+    private var continuation: CheckedContinuation<Void, Error>?
+    private var stoppedByUs = false
+
+    init(clock: SpeedClock) {
+        self.clock = clock
+    }
+
+    func run(_ task: URLSessionTask) async throws {
+        task.delegate = self
+        try await withTaskCancellationHandler {
+            try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+                self.continuation = continuation
+                task.resume()
+            }
+        } onCancel: {
+            task.cancel()
+        }
+    }
 
     func urlSession(_ session: URLSession, dataTask: URLSessionDataTask, didReceive data: Data) {
         guard dataTask.originalRequest?.httpMethod == "GET" else { return }
-        add(Int64(data.count))
-        if finished {
+        clock.add(Int64(data.count))
+        if clock.finished {
             stoppedByUs = true
             dataTask.cancel()
         }
@@ -121,8 +137,8 @@ private final class Probe: NSObject, URLSessionDataDelegate, @unchecked Sendable
         totalBytesSent: Int64,
         totalBytesExpectedToSend: Int64
     ) {
-        add(bytesSent)
-        if finished {
+        clock.add(bytesSent)
+        if clock.finished {
             stoppedByUs = true
             task.cancel()
         }

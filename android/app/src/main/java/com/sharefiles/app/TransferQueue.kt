@@ -9,6 +9,7 @@ import com.sharefiles.app.core.OutboxEntry
 import com.sharefiles.app.core.ShareApi
 import com.sharefiles.app.core.SpeedMeter
 import com.sharefiles.app.core.Transfers
+import com.sharefiles.app.ui.formatSpeed
 import java.io.File
 import java.io.IOException
 import java.util.UUID
@@ -52,6 +53,8 @@ data class TransferItem(
     val outboxId: String? = null,
     val targetUri: String? = null,
     val etag: String? = null,
+    /** Bytes held of each range when a large download is fetched in parts. */
+    val parts: List<Long>? = null,
     @Transient val speed: Double = 0.0,
 )
 
@@ -210,6 +213,8 @@ class TransferQueue(
     }
 
     private suspend fun run(item: TransferItem, client: ShareApi, position: AtomicLong) {
+        val started = System.nanoTime()
+        val startBytes = position.get()
         try {
             when (item.direction) {
                 TransferDirection.UPLOAD -> upload(item, client, position)
@@ -217,7 +222,9 @@ class TransferQueue(
             }
             attempts.remove(item.id)
             change(item.id) { it.copy(state = TransferState.DONE, transferred = it.size, speed = 0.0) }
-            AppLog.add("Xong ${item.name}")
+            val seconds = (System.nanoTime() - started) / 1e9
+            val average = if (seconds > 0) (item.size - startBytes) / seconds else 0.0
+            AppLog.add("Xong ${item.name} · %.1f s · %s".format(seconds, formatSpeed(average)))
             persist()
         } catch (e: CancellationException) {
             throw e
@@ -260,6 +267,11 @@ class TransferQueue(
                     change(item.id) { it.copy(etag = value) }
                     persist()
                 }
+            },
+            parts = item.parts,
+            onParts = { held ->
+                change(item.id) { it.copy(parts = held) }
+                persist()
             },
             onProgress = { position.set(it) },
         )

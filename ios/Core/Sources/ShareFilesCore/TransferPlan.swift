@@ -38,6 +38,22 @@ enum TransferPlan {
     /// Any other success status means a fresh copy: the file changed on the PC or Range was ignored.
     static func keepsStoredBytes(status: Int) -> Bool { status == 206 }
 
+    /// Large files are fetched as this many ranges at once, because one TCP stream does not fill fast Wi-Fi.
+    static let downloadParts = 4
+    static let parallelMinBytes: Int64 = 32 * 1024 * 1024
+
+    /// A download begun in one stream, by this version or an older one, stays in one stream.
+    static func fetchesInParts(size: Int64, stored: Int64, parts: [Int64]?) -> Bool {
+        parts?.count == downloadParts || (size >= parallelMinBytes && stored == 0)
+    }
+
+    /// Splits [size] bytes into [count] contiguous ranges. [size] must be at least [count].
+    static func splitRanges(size: Int64, count: Int) -> [ClosedRange<Int64>] {
+        (0..<count).map { i in
+            (size * Int64(i) / Int64(count))...(size * Int64(i + 1) / Int64(count) - 1)
+        }
+    }
+
     static func uniqueName(_ name: String, exists: (String) -> Bool) -> String {
         guard exists(name) else { return name }
         let file = name as NSString
@@ -91,4 +107,15 @@ enum ByteFormat {
     static func bytes(_ value: Int64) -> String { bytes(Double(value)) }
 
     static func speed(_ value: Double) -> String { bytes(value) + "/s" }
+
+    /// The same speed in megabits, the unit routers and ISPs quote.
+    static func bitrate(_ value: Double) -> String {
+        let mbps = value * 8 / 1_000_000
+        let text = mbps >= 100
+            ? String(format: "%.0f", mbps)
+            : String(format: "%.1f", mbps).replacingOccurrences(of: ".", with: ",")
+        return "\(text) Mbps"
+    }
+
+    static func rate(_ value: Double, inBits: Bool) -> String { inBits ? bitrate(value) : speed(value) }
 }

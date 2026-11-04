@@ -80,11 +80,15 @@ private struct SpeedTestCard: View {
     @State private var downloadResult: Double?
     @State private var uploadResult: Double?
     @State private var error: String?
+    @AppStorage("speedInBits") private var inBits = false
 
     var body: some View {
         VStack(spacing: 14) {
             VStack(alignment: .leading, spacing: 2) {
-                SectionTitle(text: "Đo tốc độ tới PC")
+                HStack {
+                    SectionTitle(text: "Đo tốc độ tới PC")
+                    unitToggle
+                }
                 Text("Chỉ đo đường truyền, không đụng tới ổ đĩa")
                     .font(.system(size: 12))
                     .foregroundStyle(Palette.faint)
@@ -93,10 +97,10 @@ private struct SpeedTestCard: View {
             ZStack {
                 gauge
                 VStack(spacing: 0) {
-                    Text(String(format: "%.0f", live / 1_000_000))
+                    Text(String(format: "%.0f", inBits ? live * 8 / 1_000_000 : live / 1_000_000))
                         .font(.system(size: 46, weight: .bold))
                         .foregroundStyle(.white)
-                    Text("MB/s")
+                    Text(inBits ? "Mbps" : "MB/s")
                         .font(.system(size: 14))
                         .foregroundStyle(Palette.subtle)
                     Text(running ? phase : " ")
@@ -123,6 +127,29 @@ private struct SpeedTestCard: View {
         }
         .padding(18)
         .glass()
+    }
+
+    /// MB/s for comparing with file copies, Mbps for comparing with router and Wi-Fi link rates.
+    private var unitToggle: some View {
+        HStack(spacing: 0) {
+            ForEach([false, true], id: \.self) { bits in
+                let selected = bits == inBits
+                Button {
+                    inBits = bits
+                } label: {
+                    Text(bits ? "Mbps" : "MB/s")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(selected ? Color.white : Palette.subtle)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 5)
+                        .background(selected ? Palette.violet : Color.clear, in: RoundedRectangle(cornerRadius: 8))
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(3)
+        .background(Palette.card, in: RoundedRectangle(cornerRadius: 10))
+        .overlay(RoundedRectangle(cornerRadius: 10).stroke(Palette.cardBorder, lineWidth: 1))
     }
 
     private var gauge: some View {
@@ -152,11 +179,11 @@ private struct SpeedTestCard: View {
     private func resultTile(_ label: String, _ value: Double?) -> some View {
         VStack(alignment: .leading, spacing: 3) {
             Text(label).font(.system(size: 12)).foregroundStyle(Palette.subtle)
-            Text(value.map(ByteFormat.speed) ?? "—")
+            Text(value.map { ByteFormat.rate($0, inBits: inBits) } ?? "—")
                 .font(.system(size: 18, weight: .semibold))
                 .foregroundStyle(.white)
             if let value {
-                Text(String(format: "%.2f Gbps", value * 8 / 1e9))
+                Text(ByteFormat.rate(value, inBits: !inBits))
                     .font(.system(size: 11))
                     .foregroundStyle(Palette.faint)
             }
@@ -188,7 +215,7 @@ private struct SpeedTestCard: View {
                 phase = "Đang đo gửi lên"
                 let up = try await test.upload(onSpeed: report)
                 uploadResult = up
-                AppLog.shared.add(String(format: "Đo tốc độ: tải về %.0f MB/s, gửi lên %.0f MB/s", down / 1_000_000, up / 1_000_000))
+                AppLog.shared.add("Đo tốc độ: tải về \(ByteFormat.rate(down, inBits: inBits)), gửi lên \(ByteFormat.rate(up, inBits: inBits))")
             } catch {
                 self.error = "Mất kết nối khi đang đo"
                 AppLog.shared.add("Đo tốc độ lỗi: \(error.localizedDescription)")

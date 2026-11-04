@@ -1,6 +1,6 @@
 namespace ShareFiles.Server;
 
-/// <summary>Read-only pass-through that reports its position and closes the transfer entry on dispose.</summary>
+/// <summary>Read-only pass-through that counts what it hands out and ends its part of the transfer on dispose.</summary>
 internal sealed class TrackingStream(Stream inner, TransferMonitor monitor, TransferEntry entry) : Stream
 {
     private bool _disposed;
@@ -19,14 +19,14 @@ internal sealed class TrackingStream(Stream inner, TransferMonitor monitor, Tran
     public override int Read(byte[] buffer, int offset, int count)
     {
         var read = inner.Read(buffer, offset, count);
-        entry.Report(inner.Position);
+        entry.AddSent(read);
         return read;
     }
 
     public override async ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken = default)
     {
         var read = await inner.ReadAsync(buffer, cancellationToken);
-        entry.Report(inner.Position);
+        entry.AddSent(read);
         return read;
     }
 
@@ -44,7 +44,7 @@ internal sealed class TrackingStream(Stream inner, TransferMonitor monitor, Tran
         if (disposing && !_disposed)
         {
             _disposed = true;
-            monitor.Finish(entry, inner.Position >= inner.Length ? TransferState.Done : TransferState.Interrupted);
+            monitor.EndStream(entry);
             inner.Dispose();
         }
         base.Dispose(disposing);

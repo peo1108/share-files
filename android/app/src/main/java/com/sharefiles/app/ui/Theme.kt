@@ -229,3 +229,12 @@ fun formatBytes(bytes: Double): String {
 fun formatBytes(bytes: Long) = formatBytes(bytes.toDouble())
 
 fun formatSpeed(bytesPerSecond: Double) = formatBytes(bytesPerSecond) + "/s"
+
+/** The same speed in megabits, the unit routers and ISPs quote. */
+fun formatBitrate(bytesPerSecond: Double): String {
+    val mbps = bytesPerSecond * 8 / 1_000_000
+    val number = synchronized(Symbols) {
+        if (mbps >= 100) NoDecimal.format(mbps) else OneDecimal.format(mbps)
+    }
+    return "$number Mbps"
+}

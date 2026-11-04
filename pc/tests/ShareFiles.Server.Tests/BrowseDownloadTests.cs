@@ -151,6 +151,56 @@ public class BrowseDownloadTests
     }
 
     [Fact]
+    public async Task Download_ParallelRangesShowAsOneTransfer()
+    {
+        await using var host = await TestHost.StartAsync();
+        var token = await host.PairAsync();
+        var data = Bytes.Random(400_000);
+        await File.WriteAllBytesAsync(Path.Combine(host.SharedDir, "a.bin"), data);
+        var url = $"/v1/download?root={host.RootId}&path=a.bin";
+        var etag = (await host.SendAsync(HttpMethod.Get, url, token)).Headers.ETag!;
+
+        // Four parts, the first already half held from an earlier attempt.
+        long[][] parts = [[50_000, 99_999], [100_000, 199_999], [200_000, 299_999], [300_000, 399_999]];
+        var bodies = await Task.WhenAll(parts.Select(async part =>
+        {
+            var request = host.Authed(HttpMethod.Get, url, token);
+            request.Headers.Range = new RangeHeaderValue(part[0], part[1]);
+            request.Headers.IfRange = new RangeConditionHeaderValue(etag);
+            var response = await host.Http.SendAsync(request);
+            Assert.Equal(HttpStatusCode.PartialContent, response.StatusCode);
+            return await response.Content.ReadAsByteArrayAsync();
+        }));
+        await Task.Delay(200);
+
+        for (var i = 0; i < parts.Length; i++)
+        {
+            Assert.Equal(Bytes.Sha(data[(int)parts[i][0]..((int)parts[i][1] + 1)]), Bytes.Sha(bodies[i]));
+        }
+        var entries = host.Server.Monitor.Snapshot();
+        Assert.Equal(TransferState.Done, entries[0].State);
+        Assert.Equal(data.Length, entries[0].Transferred);
+    }
+
+    [Fact]
+    public async Task Download_ShortRangeIsInterrupted()
+    {
+        await using var host = await TestHost.StartAsync();
+        var token = await host.PairAsync();
+        await File.WriteAllBytesAsync(Path.Combine(host.SharedDir, "a.bin"), Bytes.Random(4_000_000));
+
+        var request = host.Authed(HttpMethod.Get, $"/v1/download?root={host.RootId}&path=a.bin", token);
+        var response = await host.Http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead);
+        var stream = await response.Content.ReadAsStreamAsync();
+        await stream.ReadExactlyAsync(new byte[1000]);
+        response.Dispose();
+        await Task.Delay(300);
+
+        var entry = Assert.Single(host.Server.Monitor.Snapshot());
+        Assert.Equal(TransferState.Interrupted, entry.State);
+    }
+
+    [Fact]
     public async Task Speedtest_ExactBytes()
     {
         await using var host = await TestHost.StartAsync();
