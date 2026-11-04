@@ -1,0 +1,57 @@
+name: iOS
+
+on:
+  push:
+    branches: [main]
+    paths: ["ios/**", ".github/workflows/ios.yml"]
+  pull_request:
+    paths: ["ios/**", ".github/workflows/ios.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: macos-latest
+    defaults:
+      run:
+        working-directory: ios
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Test core logic
+        working-directory: ios/Core
+        run: swift test
+
+      - name: Generate Xcode project
+        run: |
+          brew install xcodegen
+          xcodegen generate
+
+      - name: Build for device without signing
+        run: |
+          xcodebuild \
+            -project ShareFiles.xcodeproj \
+            -scheme ShareFiles \
+            -configuration Release \
+            -sdk iphoneos \
+            -destination 'generic/platform=iOS' \
+            -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            build
+
+      - name: Package unsigned IPA
+        run: |
+          mkdir -p Payload
+          cp -R build/Build/Products/Release-iphoneos/ShareFiles.app Payload/
+          /usr/bin/ditto -c -k --sequesterRsrc --keepParent Payload ShareFiles-unsigned.ipa
+          ls -lh ShareFiles-unsigned.ipa
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ShareFiles-iOS-unsigned
+          path: ios/ShareFiles-unsigned.ipa
+          if-no-files-found: error
