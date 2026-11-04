@@ -54,8 +54,9 @@ enum TransferPlan {
     /// Encodes a query string. URLComponents leaves "+" alone, but the server reads it as a space,
     /// so a file called "a+b.txt" would come back as not found.
     static func query(_ values: [String: String]) -> String {
-        var allowed = CharacterSet.alphanumerics
-        allowed.insert(charactersIn: "-._~")
+        // ASCII only. CharacterSet.alphanumerics includes letters like "ả", which would stay
+        // unencoded and crash URLComponents when assigned to percentEncodedQuery.
+        let allowed = CharacterSet(charactersIn: "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-._~")
         return values.sorted { $0.key < $1.key }.map { key, value in
             let encoded = value.addingPercentEncoding(withAllowedCharacters: allowed) ?? ""
             return "\(key)=\(encoded)"

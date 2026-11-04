@@ -20,7 +20,8 @@
     <SelfContained>true</SelfContained>
     <PublishSingleFile>true</PublishSingleFile>
     <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
-    <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
+    <!-- Compression saves 108 MB of disk but costs 150 MB of RAM, in an app that runs all day. -->
+    <EnableCompressionInSingleFile>false</EnableCompressionInSingleFile>
     <DebugType>none</DebugType>
   </PropertyGroup>
 

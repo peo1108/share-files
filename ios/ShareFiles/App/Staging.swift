@@ -37,7 +37,7 @@ enum Staging {
     private static func coordinatedCopy(from source: URL, to target: URL) throws {
         var coordinationError: NSError?
         var copyError: Error?
-        NSFileCoordinator().coordinate(readingItemAt: source, options: .forUploading, error: &coordinationError) { url in
+        NSFileCoordinator().coordinate(readingItemAt: source, options: [], error: &coordinationError) { url in
             do {
                 try FileManager.default.copyItem(at: url, to: target)
             } catch {

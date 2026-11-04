@@ -49,3 +49,15 @@ iOS không cho app chạy nền lâu. Khi chuyển app khác hoặc khoá máy, 
 Gradle trên Windows không chạy được trong đường dẫn có ký tự ngoài ASCII. Nếu thư mục repo có dấu, hãy tạo một junction tên không dấu trỏ vào repo rồi build từ đó.
 
 Android cần JDK 17 trở lên và SDK platform `android-37.0`.
+
+### Khoá ký APK
+
+Nếu chưa có khoá riêng, CI ký APK bằng khoá debug tạo mới mỗi lần chạy, nên bản mới không cài đè được lên bản cũ: phải gỡ app rồi ghép đôi lại. Muốn cài đè được, tạo khoá một lần rồi lưu vào GitHub Secrets. Workflow tự dùng khoá này khi có:
+
+```powershell
+keytool -genkeypair -keystore release.keystore -storetype PKCS12 -alias sharefiles -keyalg EC -groupname secp256r1 -validity 18250 -dname "CN=Share Files"
+gh secret set ANDROID_KEYSTORE_PASSWORD
+[Convert]::ToBase64String([IO.File]::ReadAllBytes("release.keystore")) | gh secret set ANDROID_KEYSTORE_BASE64
+```
+
+Giữ `release.keystore` ở ngoài repo.

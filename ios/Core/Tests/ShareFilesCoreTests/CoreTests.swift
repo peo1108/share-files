@@ -126,9 +126,9 @@ final class ModelsTests: XCTestCase {
     }
 
     func testFormatsBytes() {
-        XCTAssertEqual(ByteFormat.bytes(999), "999 B")
-        XCTAssertEqual(ByteFormat.bytes(1_500), "1,5 KB")
-        XCTAssertEqual(ByteFormat.bytes(250_000_000), "250 MB")
+        XCTAssertEqual(ByteFormat.bytes(Int64(999)), "999 B")
+        XCTAssertEqual(ByteFormat.bytes(Int64(1_500)), "1,5 KB")
+        XCTAssertEqual(ByteFormat.bytes(Int64(250_000_000)), "250 MB")
         XCTAssertEqual(ByteFormat.speed(185_000_000), "185 MB/s")
     }
 }

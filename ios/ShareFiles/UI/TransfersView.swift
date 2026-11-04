@@ -144,7 +144,7 @@ struct TransfersView: View {
 
         // The system deletes this temporary file when the callback returns, so stage it right there.
         model.enqueue {
-            var staged: Result<StagedFile, Error> = .failure(CocoaError(.fileReadUnknown))
+            let staged = StagingOutcome()
             let done = DispatchSemaphore(value: 0)
             _ = provider.loadFileRepresentation(forTypeIdentifier: type) { url, error in
                 defer { done.signal() }
@@ -152,15 +152,20 @@ struct TransfersView: View {
                     let ext = url.pathExtension
                     let base = provider.suggestedName ?? url.deletingPathExtension().lastPathComponent
                     let name = ext.isEmpty ? base : "\(base).\(ext)"
-                    staged = Result { try Staging.stage(copying: url, named: name) }
+                    staged.result = Result { try Staging.stage(copying: url, named: name) }
                 } else if let error {
-                    staged = .failure(error)
+                    staged.result = .failure(error)
                 }
             }
             done.wait()
-            return try staged.get()
+            return try staged.result.get()
         }
     }
+}
+
+/// Carries the result out of the provider's callback. The semaphore above orders the two accesses.
+private final class StagingOutcome: @unchecked Sendable {
+    var result: Result<StagedFile, Error> = .failure(CocoaError(.fileReadUnknown))
 }
 
 private struct TransferRow: View {
