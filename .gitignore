@@ -1,0 +1,30 @@
+# .NET
+bin/
+obj/
+*.user
+.vs/
+TestResults/
+artifacts/
+
+# Android
+.gradle/
+build/
+local.properties
+.idea/
+*.iml
+.kotlin/
+captures/
+*.keystore
+*.jks
+
+# iOS
+ios/*.xcodeproj/
+ios/.build/
+ios/build/
+DerivedData/
+xcuserdata/
+*.ipa
+
+# OS
+.DS_Store
+Thumbs.db

@@ -1,0 +1,31 @@
+name: PC
+
+on:
+  push:
+    branches: [main]
+    paths: ["pc/**", ".github/workflows/pc.yml"]
+  pull_request:
+    paths: ["pc/**", ".github/workflows/pc.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: pc
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+      - run: dotnet test tests/ShareFiles.Server.Tests -c Release
+      - run: dotnet publish src/ShareFiles.App -c Release -r win-x64 -o publish
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ShareFiles-PC
+          path: pc/publish
+          if-no-files-found: error
